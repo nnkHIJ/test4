@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SDG 11.6.2 ver.00</title>
+    <link href="maplibre/maplibre-gl.css" rel="stylesheet"/>
+    <style>
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 10px;
+            border-radius: 3px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .disp-layers{
+            background-color: #ffffff;
+            margin: 3px;
+        }
+        .disp-attributes{
+            background-color: #ffffff;
+            margin: 3px;
+        }
+        #zoom-level {
+            position: absolute;
+            top: 10px;
+            right: 50px;
+            background-color: white;
+            padding: 5px;
+            border-radius: 3px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="controls">
+        <div class="disp-layers">
+            <label>
+                <input type="checkbox" id="osm-layer-chk" checked>
+                Open Street Map
+            </label>
+            <br>
+            <label>
+                <input type="checkbox" id="population-all-fill-layer-chk" checked>
+                Population2023
+            </label>
+            <br>
+            <label>
+                <input type="checkbox" id="raster-layer-chk" checked>
+                PM2.5
+            </label>
+            <br>
+        </div>
+        <div class="disp-attributes">
+            <label>属性情報</label>
+            <div id="attributes"></div>
+        </div>
+    </div>
+    <div id="zoom-level">Zoom: 12</div> 
+    <script src="maplibre/maplibre-gl.js"></script>
+    <script src="pmtiles/pmtiles.js"></script>
+    <script>
+        const protocol = new pmtiles.Protocol();
+        maplibregl.addProtocol('pmtiles', protocol.tile);
+
+        const layerIds = [
+           'osm-layer', 'raster-layer'
+        ];
+        
+        // 統合された塗りつぶしレイヤーのチェックボックスの処理
+        document.querySelector('#population-all-fill-layer-chk').addEventListener('change', () => {
+           const isChecked = document.getElementById('population-all-fill-layer-chk').checked;
+           const fillLayerIds = ['population-fill-layer', 'population-outline-layer'];
+           fillLayerIds.forEach(id => {
+               if (isChecked) {
+                   map.setLayoutProperty(id, 'visibility', 'visible');
+               } else {
+                   map.setLayoutProperty(id, 'visibility', 'none');
+               }
+           });
+        });
+
+
+        const map = new maplibregl.Map({
+            container: 'map',
+            style: {
+                version: 8,
+                sources: {
+                    'osm-tiles': {
+                        type: 'raster',
+                        tiles: [
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+                        ],
+                        tileSize: 256,
+                        attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> '
+                    }
+                },
+                layers: [
+                    {
+                        id: 'osm-layer',
+                        type: 'raster',
+                        source: 'osm-tiles',
+                        minzoom: 0,
+                        maxzoom: 19,
+                        paint: {
+                            'raster-saturation': 0.0, // 彩度を減らしてグレースケールに
+                        }
+
+                    }
+                ]
+            },
+            center: [125.5736, -8.5568],
+            zoom: 12
+        });
+
+        const toggleLayer = (id) => {
+            const isChecked = document.getElementById(`${id}-chk`).checked;
+            if (isChecked) {
+                map.setLayoutProperty(id, 'visibility', 'visible');
+            } else {
+                map.setLayoutProperty(id, 'visibility', 'none');
+            }
+        }
+
+
+
+        map.addControl(new maplibregl.NavigationControl());
+
+        map.on('load', () => {
+
+
+            map.addSource('population-source', {
+                type: 'vector',
+                tiles: [
+                    'pmtiles://http://127.0.0.1:8080/Data/population.pmtiles/{z}/{x}/{y}'
+                ],
+                minzoom: 0,
+                maxzoom: 14,
+                attribution: '<a href="https://dilimicroletroutes.github.io/" target="_blank">DiliMicroletRoutes</a> '
+            });
+
+
+            // 塗りつぶし用のレイヤーを追加
+            map.addLayer({
+                id: 'population-fill-layer',
+                type: 'fill',
+                source: 'population-source',
+                'source-layer': 'population', // データ内のレイヤー名を指定
+                paint: {
+               'fill-color': [
+                    'step',
+                   ['zoom'],
+                   [
+                     'case',
+                        ['<=', ['get', 'population'], 20000], '#ffffff', // 白色
+                        ['<=', ['get', 'population'], 40000], '#ffe3e3', 
+                        ['<=', ['get', 'population'], 60000], '#ffc6c6', 
+                        ['<=', ['get', 'population'], 80000], '#ffaaaa', 
+                        ['<=', ['get', 'population'], 100000], '#ff8e8e', 
+                        ['<=', ['get', 'population'], 120000], '#ff7171', 
+                        ['<=', ['get', 'population'], 140000], '#ff5555', 
+                        ['<=', ['get', 'population'], 160000], '#ff3939', 
+                        ['<=', ['get', 'population'], 180000], '#ff1c1c', 
+                        '#ff0000' 
+
+                    ],
+               8, [
+                    'case',
+                        ['<=', ['get', 'population'], 2500], '#ffffff', // 白色
+                        ['<=', ['get', 'population'], 5000], '#ffe3e3', 
+                        ['<=', ['get', 'population'], 7500], '#ffc6c6', 
+                        ['<=', ['get', 'population'], 10000], '#ffaaaa', 
+                        ['<=', ['get', 'population'], 12500], '#ff8e8e', 
+                        ['<=', ['get', 'population'], 15000], '#ff7171', 
+                        ['<=', ['get', 'population'], 17500], '#ff5555', 
+                        ['<=', ['get', 'population'], 20000], '#ff3939', 
+                        ['<=', ['get', 'population'], 22500], '#ff1c1c', 
+                        '#ff0000'                     
+                    ],
+               11, [
+                    'case',
+                        ['<=', ['get', 'population'], 1000], '#ffffff', // 白色
+                        ['<=', ['get', 'population'], 2000], '#ffe3e3', 
+                        ['<=', ['get', 'population'], 3000], '#ffc6c6', 
+                        ['<=', ['get', 'population'], 4000], '#ffaaaa', 
+                        ['<=', ['get', 'population'], 5000], '#ff8e8e', 
+                        ['<=', ['get', 'population'], 6000], '#ff7171', 
+                        ['<=', ['get', 'population'], 7000], '#ff5555', 
+                        ['<=', ['get', 'population'], 8000], '#ff3939', 
+                        ['<=', ['get', 'population'], 9000], '#ff1c1c', 
+                        '#ff0000' 
+                          ]
+                   ],
+
+                    'fill-opacity': 0.6 // 塗りつぶしの透過度
+                }
+            });
+
+
+            // 外枠用のレイヤーを追加
+            map.addLayer({
+                id: 'population-outline-layer',
+                type: 'line',
+                source: 'population-source',
+                'source-layer': 'population', // データ内のレイヤー名を指定
+                paint: {
+                    'line-color': '#c0c0c0', // 外枠の色を灰色に設定
+                    'line-width': 1 // 外枠の幅を１ピクセルに設定
+                }
+            });
+
+
+            // ラスターソースとレイヤーの追加
+            map.addSource('raster-source', {
+                type: 'raster',
+                tiles: [
+                    'pmtiles://http://127.0.0.1:8080/Data/V6GL02_02_2022_0-20.pmtiles/{z}/{x}/{y}'
+                ],
+                tileSize: 256,
+                minzoom: 9,
+                maxzoom: 9,
+                attribution: '<a href="https://example.com" target="_blank">Example Attribution</a>'
+            });
+
+            map.addLayer({
+                id: 'raster-layer',
+                type: 'raster',
+                source: 'raster-source',
+                paint: {
+                    'raster-opacity': 0.8
+                }
+            });
+
+
+
+
+        });
+
+  
+        // ズームレベルを表示する要素を更新する関数
+        const updateZoomLevel = () => {
+            const zoom = map.getZoom().toFixed(2); // ズームレベルを小数点以下2桁まで表示
+            document.getElementById('zoom-level').innerText = `Zoom: ${zoom}`;
+        }
+
+        // 地図のズームイベントにリスナーを追加
+        map.on('zoom', updateZoomLevel);
+
+        // 初期ズームレベルを表示
+        updateZoomLevel();
+
+
+
+        map.on('click', 'population-fill-layer', e => {
+            if (e.features && e.features.length > 0) {
+                const properties = e.features[0].properties;
+                let propertiesStr = '';
+                for(const prop in properties){
+                    propertiesStr += `${prop}: ${properties[prop]}\r\n`;
+                }
+                document.querySelector('#attributes').innerText = propertiesStr;
+            }
+        });
+
+layerIds.forEach(lyrId => {
+    document.querySelector(`#${lyrId}-chk`).addEventListener('change', () => {
+        toggleLayer(lyrId);
+    });
+});
+
+
+    </script>
+</body>
+</html>
